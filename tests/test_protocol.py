@@ -147,7 +147,7 @@ def test_official_reference_preserves_core_pybricks_control_structure():
 
 def test_official_reference_renders_isolated_stationary_gain_pair():
     text = render_official_reference(
-        0.4, 0.14, 200, 17.0, 12.0, 0.1, 10000, 10.0
+        0.4, 0.14, 200, 17.0, 12.0, 0.1, 10.0, 12500
     )
 
     assert "RATE_GAIN = 0.1" in text
@@ -156,7 +156,7 @@ def test_official_reference_renders_isolated_stationary_gain_pair():
     assert "SPEED_GAIN = 0.14" in text
     assert "SPEED_WINDOW_MS = 200" in text
     assert "DEADBAND_COMPENSATION = 12.0" in text
-    assert "TRIAL_DURATION_MS = 10000" in text
+    assert "TRIAL_DURATION_MS = 12500" in text
     assert "ABSOLUTE_ANGLE_CORRECTION_TAU_S = 10.0" in text
     assert "POSITION_GAIN = 0.45" not in text
     assert "SPEED_GAIN = 0.16" not in text

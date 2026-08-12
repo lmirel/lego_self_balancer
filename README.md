@@ -31,7 +31,7 @@ recorded session without changing the source baseline:
 
 ```bash
 python -m host.tune official-reference --rate-gain 0.018 --angle-gain 19 \
-  --position-gain 0.45 --speed-gain 0.16 --speed-window-ms 300 --duration-s 15 \
+  --position-gain 0.45 --speed-gain 0.16 --speed-window-ms 300 \
   --angle-correction-tau-s 5
 ```
 
@@ -479,11 +479,23 @@ and deadband compensation `8`.
 
 Version `0v2.1` promotes the best-tested stationary parameters to defaults:
 `rate=0.018`, `angle=19`, `position=0.45`, `speed=0.20`, a 200 ms speed
-window, deadband compensation `8`, a 5-second absolute-angle correction, and a
-15-second test duration. It also introduces zero-valued commanded speed and
+window, deadband compensation `8`, and a 5-second absolute-angle correction.
+After arming, it runs until CENTER is pressed, a hard fall is detected, or the
+Bluetooth firmware stop is used. It also introduces zero-valued commanded speed and
 turn boundaries. With both at zero, the robot remains in stationary-hold mode;
 a future game-controller adapter can update them without changing the balance
 law.
+
+Version `0v2.2` is the final pre-gamepad checkpoint. It runs indefinitely by
+default until CENTER is pressed, while retaining an optional `--duration-s`
+timeout for diagnostic trials. The hard-fall and Bluetooth stops remain active.
+
+For a time-bounded diagnostic run, pass a positive duration. Omitting it (or
+passing zero) keeps the normal CENTER-button stop behavior:
+
+```bash
+python -m host.tune official-reference --duration-s 15
+```
 
 The `0v1` state-feedback gains remain the rollback baseline. Development toward
 `0v2` proceeds in independently verifiable stages:

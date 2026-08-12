@@ -35,7 +35,7 @@ COUNTDOWN_SECONDS = 3
 COUNTDOWN_RATE_LIMIT_DPS = 15.0
 COUNTDOWN_WHEEL_STEP_DEG = 4
 FALL_RELATIVE_ANGLE_DEG = 12.0
-TRIAL_DURATION_MS = 15000
+TRIAL_DURATION_MS = 0
 TELEMETRY_PERIOD_MS = 40
 
 # Controller-input boundary. Zero commands preserve stationary holding.
@@ -205,11 +205,10 @@ try:
             state = "FALLEN"
             print("FALLEN,{},{:.3f}".format(now_ms, relative_angle))
             break
-        if now_ms >= TRIAL_DURATION_MS:
+        if TRIAL_DURATION_MS > 0 and now_ms >= TRIAL_DURATION_MS:
             state = "COMPLETE"
             print("TRIAL_COMPLETE,{}".format(now_ms))
             break
-
         rate_term = RATE_GAIN * rate
         angle_term = ANGLE_GAIN * relative_angle
         position_term = POSITION_GAIN * (position - commanded_position)
