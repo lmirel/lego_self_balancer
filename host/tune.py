@@ -735,10 +735,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     official_parser.add_argument("--name", help="Pybricks Bluetooth hub name")
     official_parser.add_argument("--position-gain", type=float, default=0.45)
-    official_parser.add_argument("--speed-gain", type=float, default=0.16)
+    official_parser.add_argument("--speed-gain", type=float, default=0.20)
     official_parser.add_argument("--angle-gain", type=float, default=19.0)
     official_parser.add_argument("--rate-gain", type=float, default=0.018)
-    official_parser.add_argument("--deadband-compensation", type=float, default=0.0)
+    official_parser.add_argument("--deadband-compensation", type=float, default=8.0)
     official_parser.add_argument(
         "--duration-s", type=int, default=15, choices=(10, 15, 30)
     )
@@ -746,7 +746,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--angle-correction-tau-s", type=float, default=5.0
     )
     official_parser.add_argument(
-        "--speed-window-ms", type=int, default=300, choices=(100, 150, 200, 300)
+        "--speed-window-ms", type=int, default=200, choices=(100, 150, 200, 300)
     )
     return parser
 

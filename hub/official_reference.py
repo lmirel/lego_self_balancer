@@ -13,18 +13,18 @@ RIGHT_SIGN = 1
 BALANCE_AXIS = Axis.X
 
 DT_MS = 5
-SPEED_WINDOW_MS = 300
+SPEED_WINDOW_MS = 200
 WINDOW = SPEED_WINDOW_MS // DT_MS
 RATE_GAIN = 0.018
 ANGLE_GAIN = 19.0
 # Stationary full-state experiment. These two gains act on fixed encoder-zero
 # position and wheel velocity and must be tuned together for station keeping.
 POSITION_GAIN = 0.45
-SPEED_GAIN = 0.16
+SPEED_GAIN = 0.20
 NOMINAL_VOLTAGE_MV = 7200
 DUTY_LIMIT = 100.0
 ABSOLUTE_ANGLE_CORRECTION_TAU_S = 5.0
-DEADBAND_COMPENSATION = 0.0
+DEADBAND_COMPENSATION = 8.0
 DEADBAND_COMMAND_MIN = 3.0
 DEADBAND_FADE_SPEED_DPS = 120.0
 
@@ -35,8 +35,12 @@ COUNTDOWN_SECONDS = 3
 COUNTDOWN_RATE_LIMIT_DPS = 15.0
 COUNTDOWN_WHEEL_STEP_DEG = 4
 FALL_RELATIVE_ANGLE_DEG = 12.0
-TRIAL_DURATION_MS = 30000
+TRIAL_DURATION_MS = 15000
 TELEMETRY_PERIOD_MS = 40
+
+# Controller-input boundary. Zero commands preserve stationary holding.
+COMMAND_SPEED_DPS = 0.0
+COMMAND_TURN_DUTY = 0.0
 
 
 def stop_motors(left, right):
@@ -142,6 +146,7 @@ try:
     position_buffer = [0.0] * WINDOW
     buffer_index = 0
     relative_angle = 0.0
+    commanded_position = 0.0
 
     print(
         "TRIAL_STARTED,mode=OFFICIAL_REFERENCE,dt_ms={},speed_window_ms={},"
@@ -151,7 +156,7 @@ try:
     )
     print(
         "timestamp_ms,relative_angle_deg,absolute_angle_deg,gyro_x_dps,wheel_position_deg,"
-        "wheel_speed_dps,rate_term,angle_term,position_term,speed_term,"
+        "commanded_position_deg,wheel_speed_dps,rate_term,angle_term,position_term,speed_term,"
         "battery_mv,duty,left_angle_deg,right_angle_deg,loop_dt_ms,state"
     )
 
@@ -194,6 +199,7 @@ try:
         speed = (position - position_buffer[buffer_index]) / SPEED_WINDOW_MS * 1000.0
         position_buffer[buffer_index] = position
         buffer_index = (buffer_index + 1) % WINDOW
+        commanded_position += COMMAND_SPEED_DPS * DT_MS / 1000.0
 
         if abs(relative_angle) >= FALL_RELATIVE_ANGLE_DEG:
             state = "FALLEN"
@@ -206,7 +212,7 @@ try:
 
         rate_term = RATE_GAIN * rate
         angle_term = ANGLE_GAIN * relative_angle
-        position_term = POSITION_GAIN * position
+        position_term = POSITION_GAIN * (position - commanded_position)
         speed_term = SPEED_GAIN * speed
         battery_mv = hub.battery.voltage()
         raw_duty = (rate_term + angle_term + position_term + speed_term) * (
@@ -222,14 +228,15 @@ try:
         duty = raw_duty + compensation
         duty = max(-DUTY_LIMIT, min(DUTY_LIMIT, duty))
 
-        left.dc(LEFT_SIGN * duty)
-        right.dc(RIGHT_SIGN * duty)
+        left.dc(LEFT_SIGN * (duty - COMMAND_TURN_DUTY))
+        right.dc(RIGHT_SIGN * (duty + COMMAND_TURN_DUTY))
 
         if now_ms >= next_telemetry_ms:
             print(
                 "{},{:.3f},{:.3f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},"
-                "{:.2f},{:.2f},{},{:.2f},{},{},{},{}".format(
-                    now_ms, relative_angle, absolute_angle, rate, position, speed,
+                "{:.2f},{:.2f},{:.2f},{},{:.2f},{},{},{},{}".format(
+                    now_ms, relative_angle, absolute_angle, rate, position,
+                    commanded_position, speed,
                     rate_term, angle_term, position_term, speed_term,
                     battery_mv, duty, left_angle, right_angle, loop_dt_ms, state,
                 )

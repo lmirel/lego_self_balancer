@@ -122,7 +122,7 @@ def test_official_reference_preserves_core_pybricks_control_structure():
     text = OFFICIAL_REFERENCE_PROGRAM.read_text()
 
     assert "DT_MS = 5" in text
-    assert "SPEED_WINDOW_MS = 300" in text
+    assert "SPEED_WINDOW_MS = 200" in text
     assert "gyro_bias, upright_roll = wait_for_stable_countdown(hub, left, right)" in text
     assert "rate = raw_rate - gyro_bias" in text
     assert "relative_angle += rate * DT_MS / 1000.0" in text
@@ -131,14 +131,16 @@ def test_official_reference_preserves_core_pybricks_control_structure():
     assert "RATE_GAIN = 0.018" in text
     assert "ANGLE_GAIN = 19.0" in text
     assert "POSITION_GAIN = 0.45" in text
-    assert "SPEED_GAIN = 0.16" in text
+    assert "SPEED_GAIN = 0.20" in text
     assert "angle_term = ANGLE_GAIN * relative_angle" in text
-    assert "position_term = POSITION_GAIN * position" in text
+    assert "position_term = POSITION_GAIN * (position - commanded_position)" in text
     assert "STABLE_RATE_DPS = 3.0" in text
     assert "STABLE_WHEEL_STEP_DEG = 1" in text
     assert "NOMINAL_VOLTAGE_MV / battery_mv" in text
-    assert "left.dc(LEFT_SIGN * duty)" in text
-    assert "right.dc(RIGHT_SIGN * duty)" in text
+    assert "COMMAND_SPEED_DPS = 0.0" in text
+    assert "COMMAND_TURN_DUTY = 0.0" in text
+    assert "left.dc(LEFT_SIGN * (duty - COMMAND_TURN_DUTY))" in text
+    assert "right.dc(RIGHT_SIGN * (duty + COMMAND_TURN_DUTY))" in text
     assert "DEADBAND_FADE_SPEED_DPS = 120.0" in text
     assert "duty = raw_duty + compensation" in text
 

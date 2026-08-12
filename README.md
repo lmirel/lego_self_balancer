@@ -477,6 +477,14 @@ window, and speed-gated deadband compensation. The best tested session used
 `rate=0.018`, `angle=19`, `position=0.45`, `speed=0.20`, a 200 ms speed window,
 and deadband compensation `8`.
 
+Version `0v2.1` promotes the best-tested stationary parameters to defaults:
+`rate=0.018`, `angle=19`, `position=0.45`, `speed=0.20`, a 200 ms speed
+window, deadband compensation `8`, a 5-second absolute-angle correction, and a
+15-second test duration. It also introduces zero-valued commanded speed and
+turn boundaries. With both at zero, the robot remains in stationary-hold mode;
+a future game-controller adapter can update them without changing the balance
+law.
+
 The `0v1` state-feedback gains remain the rollback baseline. Development toward
 `0v2` proceeds in independently verifiable stages:
 
