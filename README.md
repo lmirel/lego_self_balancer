@@ -1,5 +1,8 @@
 # LEGO 51515 self-balancing robot
 
+The finished pre-gamepad stationary program is also packaged as a standalone
+Pybricks app in [`apps/0v2p2/`](apps/0v2p2/README.md).
+
 ## Working baseline: 0v1
 
 Version `0v1` is the first physically validated self-balancing baseline. It is
@@ -489,6 +492,42 @@ law.
 Version `0v2.2` is the final pre-gamepad checkpoint. It runs indefinitely by
 default until CENTER is pressed, while retaining an optional `--duration-s`
 timeout for diagnostic trials. The hard-fall and Bluetooth stops remain active.
+
+Development of host-side PlayStation controller input lives in
+[`apps/ps_controller`](apps/ps_controller/README.md). Its first phase is an
+input-only diagnostic; the staged BLE, safety-watchdog, steering, and drive plan
+is recorded in its roadmap.
+
+## 0v3 game-controller checkpoint
+
+Version `0v3` adds host-side PS4 control to the locked `0v2p2` balance law.
+Pygame reads drive axis 1 and turn axis 2, then sends filtered, sequenced commands
+at 50 Hz over the Pybricks BLE stdin channel. The hub validates runtime limits,
+rejects stale commands, and zeros drive and turn after a 250 ms timeout.
+
+Validated defaults are 300 wheel degrees/second maximum drive and 20 duty maximum
+turn. Drive advances and freezes the position reference; steering is applied as
+a differential around balance duty. CENTER, Ctrl-C, controller/BLE loss, the
+12-degree fall cutoff, and a 750 degrees/second runaway cutoff remain stop paths.
+
+Set up and run:
+
+```bash
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python apps/ps_controller/run_remote.py
+```
+
+After one normal download, runtime comparisons can reuse the stored hub program:
+
+```bash
+python apps/ps_controller/run_remote.py --use-stored-program \
+  --max-drive-speed-dps 300 --max-turn-duty 20
+```
+
+See [`apps/ps_controller/README.md`](apps/ps_controller/README.md) for controller
+diagnostics, deployment details, parameter bounds, safety behavior, and the full
+validation record.
 
 For a time-bounded diagnostic run, pass a positive duration. Omitting it (or
 passing zero) keeps the normal CENTER-button stop behavior:

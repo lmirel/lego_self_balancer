@@ -10,6 +10,7 @@ pluggy==1.6.0
 prompt_toolkit==3.0.53
 pybricks==4.0.0
 pybricksdev==2.3.2
+pygame-ce==2.5.7
 Pygments==2.20.0
 pyobjc-core==12.2.1
 pyobjc-framework-Cocoa==12.2.1
