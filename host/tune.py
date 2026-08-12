@@ -13,6 +13,7 @@ import tomllib
 
 from .transport import run_ble_program
 from .scoring import score_csv
+from .official_metrics import official_metrics_csv
 from .search import (
     SEARCH_SCHEMA_VERSION,
     current_candidate,
@@ -78,7 +79,7 @@ class TrialRecorder:
         event_name = line.split(",", 1)[0]
         if event_name in (
             "READY", "READY_AUTO", "READY_OFFICIAL", "WAITING_AUTO", "WAITING_OFFICIAL",
-            "UPRIGHT_STABLE", "COUNTDOWN",
+            "UPRIGHT_STABLE", "COUNTDOWN", "GYRO_BIAS", "UPRIGHT_ROLL",
             "COUNTDOWN_CANCELLED", "START_REJECTED", "ARMED", "ARMED_AUTO",
             "TRIAL_STARTED", "TRIAL_COMPLETE", "FALLEN", "ABORTED", "ERROR",
             "TIMING", "STOPPED",
@@ -599,23 +600,107 @@ def run_reference(hub_name: str | None) -> int:
     )[0]
 
 
-def run_official_reference(hub_name: str | None) -> int:
+def render_official_reference(
+    position_gain: float, speed_gain: float, speed_window_ms: int = 300,
+    angle_gain: float = 19.0, deadband_compensation: float = 0.0,
+    rate_gain: float = 0.018, duration_ms: int = 15000,
+    angle_correction_tau_s: float = 5.0,
+) -> str:
+    """Render one isolated stationary full-state gain pair."""
+    text = OFFICIAL_REFERENCE_PROGRAM.read_text(encoding="utf-8")
+    text, position_count = re.subn(
+        r"^POSITION_GAIN = [-+0-9.eE]+$",
+        f"POSITION_GAIN = {position_gain}",
+        text,
+        flags=re.MULTILINE,
+    )
+    text, angle_count = re.subn(
+        r"^ANGLE_GAIN = [-+0-9.eE]+$",
+        f"ANGLE_GAIN = {angle_gain}",
+        text,
+        flags=re.MULTILINE,
+    )
+    text, rate_count = re.subn(
+        r"^RATE_GAIN = [-+0-9.eE]+$",
+        f"RATE_GAIN = {rate_gain}",
+        text,
+        flags=re.MULTILINE,
+    )
+    text, speed_count = re.subn(
+        r"^SPEED_GAIN = [-+0-9.eE]+$",
+        f"SPEED_GAIN = {speed_gain}",
+        text,
+        flags=re.MULTILINE,
+    )
+    text, window_count = re.subn(
+        r"^SPEED_WINDOW_MS = [0-9]+$",
+        f"SPEED_WINDOW_MS = {speed_window_ms}",
+        text,
+        flags=re.MULTILINE,
+    )
+    text, deadband_count = re.subn(
+        r"^DEADBAND_COMPENSATION = [-+0-9.eE]+$",
+        f"DEADBAND_COMPENSATION = {deadband_compensation}",
+        text,
+        flags=re.MULTILINE,
+    )
+    text, duration_count = re.subn(
+        r"^TRIAL_DURATION_MS = [0-9]+$",
+        f"TRIAL_DURATION_MS = {duration_ms}",
+        text,
+        flags=re.MULTILINE,
+    )
+    text, tau_count = re.subn(
+        r"^ABSOLUTE_ANGLE_CORRECTION_TAU_S = [-+0-9.eE]+$",
+        f"ABSOLUTE_ANGLE_CORRECTION_TAU_S = {angle_correction_tau_s}",
+        text,
+        flags=re.MULTILINE,
+    )
+    if (
+        rate_count, angle_count, position_count, speed_count,
+        window_count, deadband_count, duration_count, tau_count,
+    ) != (
+        1, 1, 1, 1, 1, 1, 1, 1
+    ):
+        raise ValueError("official reference gain constants not found exactly once")
+    return text
+
+
+def run_official_reference(
+    hub_name: str | None, position_gain: float, speed_gain: float,
+    speed_window_ms: int, angle_gain: float, deadband_compensation: float,
+    rate_gain: float, duration_s: int, angle_correction_tau_s: float,
+) -> int:
     """Run one safety-wrapped adaptation of the official Pybricks balancer."""
     print("OFFICIAL_PYBRICKS_REFERENCE")
     print("  5 ms loop, integrated gyro angle, 300 ms wheel-speed window")
     print("  raw duty with rate + angle + position + speed feedback")
-    confirmation = input("Type Y to authorize one catch-ready official reference trial: ")
-    if confirmation != "Y":
-        print("CANCELLED,no trial launched")
-        return 0
+    print(
+        f"  stationary gains: rate={rate_gain}, angle={angle_gain}, "
+        f"position={position_gain}, "
+        f"speed={speed_gain}, "
+        f"speed_window_ms={speed_window_ms}, deadband={deadband_compensation}, "
+        f"duration_s={duration_s}, angle_correction_tau_s={angle_correction_tau_s}"
+    )
     session_dir = create_session_dir()
     program_path = session_dir / "hub-program.py"
-    program_path.write_text(OFFICIAL_REFERENCE_PROGRAM.read_text(), encoding="utf-8")
+    program_path.write_text(
+        render_official_reference(
+            position_gain, speed_gain, speed_window_ms, angle_gain,
+            deadband_compensation, rate_gain, duration_s * 1000,
+            angle_correction_tau_s,
+        ),
+        encoding="utf-8",
+    )
     recorder = TrialRecorder(session_dir)
     try:
         returncode = run_ble_program(program_path, recorder.handle_line, hub_name)
     finally:
         recorder.close()
+    if recorder.telemetry_rows:
+        metrics = official_metrics_csv(recorder.telemetry_path, recorder.events)
+        write_json(session_dir / "official-metrics.json", metrics)
+        print("OFFICIAL_METRICS," + json.dumps(metrics, separators=(",", ":")))
     print(f"SAVED,{session_dir}")
     return returncode
 
@@ -649,6 +734,20 @@ def build_parser() -> argparse.ArgumentParser:
         "official-reference", help="run the adapted official Pybricks balancer"
     )
     official_parser.add_argument("--name", help="Pybricks Bluetooth hub name")
+    official_parser.add_argument("--position-gain", type=float, default=0.45)
+    official_parser.add_argument("--speed-gain", type=float, default=0.16)
+    official_parser.add_argument("--angle-gain", type=float, default=19.0)
+    official_parser.add_argument("--rate-gain", type=float, default=0.018)
+    official_parser.add_argument("--deadband-compensation", type=float, default=0.0)
+    official_parser.add_argument(
+        "--duration-s", type=int, default=15, choices=(10, 15, 30)
+    )
+    official_parser.add_argument(
+        "--angle-correction-tau-s", type=float, default=5.0
+    )
+    official_parser.add_argument(
+        "--speed-window-ms", type=int, default=300, choices=(100, 150, 200, 300)
+    )
     return parser
 
 
@@ -663,7 +762,23 @@ def main() -> int:
     if args.command == "reference":
         return run_reference(args.name)
     if args.command == "official-reference":
-        return run_official_reference(args.name)
+        if not 0.0 <= args.position_gain <= 1.0:
+            raise SystemExit("--position-gain must be between 0 and 1")
+        if not 0.0 <= args.speed_gain <= 0.5:
+            raise SystemExit("--speed-gain must be between 0 and 0.5")
+        if not 10.0 <= args.angle_gain <= 30.0:
+            raise SystemExit("--angle-gain must be between 10 and 30")
+        if not 0.0 <= args.rate_gain <= 1.0:
+            raise SystemExit("--rate-gain must be between 0 and 1")
+        if not 0.0 <= args.deadband_compensation <= 25.0:
+            raise SystemExit("--deadband-compensation must be between 0 and 25")
+        if not 1.0 <= args.angle_correction_tau_s <= 30.0:
+            raise SystemExit("--angle-correction-tau-s must be between 1 and 30")
+        return run_official_reference(
+            args.name, args.position_gain, args.speed_gain, args.speed_window_ms,
+            args.angle_gain, args.deadband_compensation, args.rate_gain,
+            args.duration_s, args.angle_correction_tau_s,
+        )
     raise AssertionError(args.command)
 
 

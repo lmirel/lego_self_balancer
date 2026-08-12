@@ -26,6 +26,15 @@ source .venv/bin/activate
 python -m host.tune official-reference
 ```
 
+Experimental stationary position and wheel-speed gains can be rendered for one
+recorded session without changing the source baseline:
+
+```bash
+python -m host.tune official-reference --rate-gain 0.018 --angle-gain 19 \
+  --position-gain 0.45 --speed-gain 0.16 --speed-window-ms 300 --duration-s 15 \
+  --angle-correction-tau-s 5
+```
+
 Hold the robot motionless at its natural balance pose during calibration and
 keep a hand ready to catch it. Trial output is recorded under `results/`, which
 is intentionally excluded from source control.
@@ -452,8 +461,36 @@ python -m host.tune official-reference
 
 It preserves the official 5 ms loop, gyro-integrated relative angle, 300 ms
 encoder speed window, raw duty, battery compensation, and coupled gains
-`0.018*rate + 19*angle + 0.45*position + 0.16*speed`. Ports, motor polarity, and
+`0.018*rate + 19*angle + 0.45*position + 0.176*speed`. Ports, motor polarity, and
 IMU axis are adapted to this validated build; steering and commanded travel are
 removed. The integrated angle and encoders are zeroed immediately after the
-stable countdown. Existing fall/abort safeguards remain active, and the command
-does not alter staged-search state.
+stable countdown. The working `0v1` version calibrates stationary gyro bias,
+uses a 12-degree hard fall cutoff, and records `official-metrics.json`. The
+command does not alter staged-search state.
+
+## 0v2 centering and settling roadmap
+
+Version `0v2` checkpoints the pre-capture stationary controller architecture:
+fixed encoder-zero position feedback, bias-corrected gyro integration with a
+slow absolute-roll anchor, configurable state-feedback gains, speed-estimation
+window, and speed-gated deadband compensation. The best tested session used
+`rate=0.018`, `angle=19`, `position=0.45`, `speed=0.20`, a 200 ms speed window,
+and deadband compensation `8`.
+
+The `0v1` state-feedback gains remain the rollback baseline. Development toward
+`0v2` proceeds in independently verifiable stages:
+
+1. **Measure:** record completion, early/late angle RMS, settling ratio, late
+   mean angle, wheel-position drift, wheel-speed RMS, duty, gyro bias, and large
+   rate disturbances for every official-reference trial.
+2. **Center:** replace direct position-to-duty feedback with a fixed-position
+   outer loop that requests a bounded, rate-limited lean toward encoder zero.
+   Confirm reduced drift without lowering completion rate. The reference does
+   not follow the robot; only a future explicit drive command may move it.
+3. **Settle:** with centering locked, tune only gyro-rate feedback using repeated
+   trials. Select by median completion and settling ratio, not a single record.
+4. **Disturbance validation:** test repeatable gentle nudges and measure recovery
+   time, residual position offset, peak angle, and peak duty.
+5. **Lock 0v2:** require multiple 30-second completions, bounded wheel position,
+   a non-growing oscillation envelope, and repeatable nudge recovery before
+   updating the working version.
