@@ -3,6 +3,10 @@
 The finished pre-gamepad stationary program is also packaged as a standalone
 Pybricks app in [`apps/0v2p2/`](apps/0v2p2/README.md).
 
+The validated PS4-controlled `0v3` release is packaged independently in
+[`apps/0v3/`](apps/0v3/README.md), including its host environment, hub program,
+deployment instructions, runtime parameters, and safety notes.
+
 ## Working baseline: 0v1
 
 Version `0v1` is the first physically validated self-balancing baseline. It is

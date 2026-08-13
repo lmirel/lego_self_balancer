@@ -27,17 +27,10 @@ LEFT_SIGN = -1
 RIGHT_SIGN = 1
 MAX_TURN_DUTY = 20.0
 MAX_DRIVE_SPEED_DPS = 300.0
+HARD_MAX_DRIVE_SPEED_DPS = 300.0
 HARD_MAX_TURN_DUTY = 20.0
 DRIVE_NEUTRAL = 0.03
-RUNAWAY_SPEED_DPS = 1000.0
-HIGH_SPEED_THRESHOLD_DPS = 400.0
-HIGH_SPEED_ANGLE_LIMIT_DEG = 10.5
-REVERSAL_RELEASE_SPEED_DPS = 60.0
-REVERSAL_RELEASE_REFERENCE_DPS = 15.0
-REFERENCE_ACCEL_DPS2 = 600.0
-REFERENCE_DECEL_MAX_DPS2 = 1800.0
-REFERENCE_DECEL_MIN_DPS2 = 200.0
-REFERENCE_DECEL_FULL_SPEED_DPS = 700.0
+RUNAWAY_SPEED_DPS = 750.0
 WATCHDOG_MS = 250
 COMMAND_REPORT_MS = 200
 MAX_LINE_LENGTH = 48
@@ -45,20 +38,14 @@ MAX_LINE_LENGTH = 48
 CALIBRATE_RATE_DPS = 5.0
 CALIBRATE_WHEEL_STEP_DEG = 3
 CALIBRATE_WHEEL_DRIFT_DEG = 12
-CALIBRATE_MAX_ABS_PITCH_DEG = 15.0
-CALIBRATE_UPRIGHT_ROLL_DEG = 90.0
-CALIBRATE_ROLL_TOLERANCE_DEG = 8.0
+COUNTDOWN_RATE_DPS = 20.0
+COUNTDOWN_WHEEL_STEP_DEG = 6
+COUNTDOWN_WHEEL_DRIFT_DEG = 24
 
 
 def stop_motors(left, right):
     left.stop()
     right.stop()
-
-
-def move_toward(value, target, maximum_step):
-    if value < target:
-        return min(value + maximum_step, target)
-    return max(value - maximum_step, target)
 
 
 def wheel_step(left, right, previous_left, previous_right):
@@ -84,7 +71,6 @@ def calibrate(hub, left, right):
     hub.display.char("H")
     while True:
         rate = hub.imu.angular_velocity(Axis.X)
-        pitch, roll = hub.imu.tilt()
         step, previous_left, previous_right = wheel_step(
             left, right, previous_left, previous_right
         )
@@ -94,36 +80,67 @@ def calibrate(hub, left, right):
         )
         if report_ms <= 0:
             print(
-                "CALIBRATION_WAIT,pitch_deg={:.2f},roll_deg={:.2f},rate_dps={:.1f},"
-                "wheel_step_deg={},wheel_drift_deg={}".format(
-                    pitch, roll, rate, step, drift
-                )
+                "CALIBRATION_WAIT,rate_dps={:.1f},wheel_step_deg={},"
+                "wheel_drift_deg={}".format(rate, step, drift)
             )
             report_ms = 500
         if (
-            abs(pitch) <= CALIBRATE_MAX_ABS_PITCH_DEG
-            and abs(roll - CALIBRATE_UPRIGHT_ROLL_DEG)
-            <= CALIBRATE_ROLL_TOLERANCE_DEG
-            and abs(rate) <= CALIBRATE_RATE_DPS
+            abs(rate) <= CALIBRATE_RATE_DPS
             and step <= CALIBRATE_WHEEL_STEP_DEG
             and drift <= CALIBRATE_WHEEL_DRIFT_DEG
         ):
             stable_ms += 20
             rate_sum += rate
-            roll_sum += roll
+            roll_sum += hub.imu.tilt()[1]
             samples += 1
             if stable_ms >= 500:
-                gyro_bias = rate_sum / samples
-                upright_roll = roll_sum / samples
-                hub.display.char("R")
-                print(
-                    "RELEASE_READY,gyro_bias_dps={:.3f},upright_roll_deg={:.2f}".format(
-                        gyro_bias, upright_roll
-                    )
-                )
-                hub.speaker.beep(700, 150)
-                hub.display.off()
-                return gyro_bias, upright_roll
+                countdown_left = previous_left
+                countdown_right = previous_right
+                for number in (3, 2, 1):
+                    hub.display.number(number)
+                    hub.speaker.beep(500, 100)
+                    for _ in range(45):
+                        wait(20)
+                        rate = hub.imu.angular_velocity(Axis.X)
+                        step, previous_left, previous_right = wheel_step(
+                            left, right, previous_left, previous_right
+                        )
+                        countdown_drift = max(
+                            abs(previous_left - countdown_left),
+                            abs(previous_right - countdown_right),
+                        )
+                        if (
+                            abs(rate) <= CALIBRATE_RATE_DPS
+                            and step <= CALIBRATE_WHEEL_STEP_DEG
+                        ):
+                            rate_sum += rate
+                            roll_sum += hub.imu.tilt()[1]
+                            samples += 1
+                        if (
+                            abs(rate) > COUNTDOWN_RATE_DPS
+                            or step > COUNTDOWN_WHEEL_STEP_DEG
+                            or countdown_drift > COUNTDOWN_WHEEL_DRIFT_DEG
+                        ):
+                            print(
+                                "COUNTDOWN_CANCELLED,rate_dps={:.1f},"
+                                "wheel_step_deg={},wheel_drift_deg={}".format(
+                                    rate, step, countdown_drift
+                                )
+                            )
+                            hub.display.char("H")
+                            stable_ms = 0
+                            rate_sum = 0.0
+                            roll_sum = 0.0
+                            samples = 0
+                            origin_left = previous_left
+                            origin_right = previous_right
+                            break
+                    else:
+                        continue
+                    break
+                else:
+                    hub.display.off()
+                    return rate_sum / samples, roll_sum / samples
         else:
             stable_ms = 0
             rate_sum = 0.0
@@ -172,14 +189,9 @@ def parse_config(line):
         turn_limit = float(fields[2])
     except ValueError:
         return None
-    if (
-        drive_limit != drive_limit
-        or drive_limit == float("inf")
-        or drive_limit == -float("inf")
-        or turn_limit != turn_limit
-    ):
+    if drive_limit != drive_limit or turn_limit != turn_limit:
         return None
-    if drive_limit <= 0.0:
+    if drive_limit <= 0.0 or drive_limit > HARD_MAX_DRIVE_SPEED_DPS:
         return None
     if turn_limit < 0.0 or turn_limit > HARD_MAX_TURN_DUTY:
         return None
@@ -215,7 +227,6 @@ try:
     last_command_ms = None
     drive_command = 0.0
     turn_command = 0.0
-    reference_speed = 0.0
     max_drive_speed_dps = MAX_DRIVE_SPEED_DPS
     max_turn_duty = MAX_TURN_DUTY
     watchdog_active = True
@@ -279,47 +290,13 @@ try:
 
         if abs(drive_command) <= DRIVE_NEUTRAL:
             drive_command = 0.0
-        requested_speed = drive_command * max_drive_speed_dps
-        decel_speed_fraction = min(
-            1.0, abs(speed) / REFERENCE_DECEL_FULL_SPEED_DPS
-        )
-        reference_decel_dps2 = REFERENCE_DECEL_MAX_DPS2 - (
-            REFERENCE_DECEL_MAX_DPS2 - REFERENCE_DECEL_MIN_DPS2
-        ) * decel_speed_fraction
-        reversal_requested = (
-            requested_speed * speed < 0.0
-            or requested_speed * reference_speed < 0.0
-        )
-        reversal_blocked = reversal_requested and (
-            abs(speed) > REVERSAL_RELEASE_SPEED_DPS
-            or abs(reference_speed) > REVERSAL_RELEASE_REFERENCE_DPS
-        )
-        stopping = drive_command == 0.0 or reversal_blocked
-        if stopping:
-            # Continue moving the position target along a decelerating
-            # trajectory. An immediate target freeze demands unbounded braking
-            # lean at high speed.
-            reference_speed = move_toward(
-                reference_speed,
-                0.0,
-                reference_decel_dps2 * DT_MS / 1000.0,
+        else:
+            # Positive drive advances the position reference at a bounded rate.
+            # Neutral leaves it unchanged so position feedback can brake and
+            # hold. Never jump the reference to the measured wheel position.
+            commanded_position += (
+                drive_command * max_drive_speed_dps * DT_MS / 1000.0
             )
-        elif drive_command != 0.0:
-            same_direction = reference_speed * requested_speed >= 0.0
-            building_speed = (
-                same_direction and abs(requested_speed) > abs(reference_speed)
-            )
-            reference_slew_dps2 = (
-                REFERENCE_ACCEL_DPS2 if building_speed else reference_decel_dps2
-            )
-            reference_speed = move_toward(
-                reference_speed,
-                requested_speed,
-                reference_slew_dps2 * DT_MS / 1000.0,
-            )
-        # Integrating the motion profile gives faster travel proportionally more
-        # stopping distance. Once reference speed reaches zero, target freezes.
-        commanded_position += reference_speed * DT_MS / 1000.0
 
         if abs(relative_angle) >= FALL_ANGLE_DEG:
             print("BALANCE_STOPPED,reason=fallen,angle={:.2f}".format(
@@ -330,15 +307,6 @@ try:
             print("BALANCE_STOPPED,reason=runaway_speed,speed={:.1f}".format(
                 speed
             ))
-            break
-        if (
-            abs(speed) >= HIGH_SPEED_THRESHOLD_DPS
-            and abs(relative_angle) >= HIGH_SPEED_ANGLE_LIMIT_DEG
-        ):
-            print(
-                "BALANCE_STOPPED,reason=high_speed_angle,speed={:.1f},"
-                "angle={:.2f}".format(speed, relative_angle)
-            )
             break
 
         raw_duty = (
@@ -365,17 +333,11 @@ try:
             age_ms = -1 if last_command_ms is None else now_ms - last_command_ms
             print(
                 "CONTROL_STATUS,drive={:.2f},drive_speed_dps={:.1f},turn={:.2f},"
-                "reference_speed_dps={:.1f},reversal_blocked={},"
-                "reference_decel_dps2={:.0f},"
-                "turn_duty={:.2f},position={:.1f},"
-                "target={:.1f},speed={:.1f},"
+                "turn_duty={:.2f},position={:.1f},target={:.1f},speed={:.1f},"
                 "angle={:.2f},duty={:.1f},age_ms={},"
                 "watchdog={}".format(
                     drive_command, drive_command * max_drive_speed_dps,
-                    turn_command, reference_speed,
-                    1 if reversal_blocked else 0,
-                    reference_decel_dps2,
-                    turn_duty, position, commanded_position,
+                    turn_command, turn_duty, position, commanded_position,
                     speed, relative_angle, duty,
                     age_ms, 1 if watchdog_active else 0,
                 )

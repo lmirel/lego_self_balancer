@@ -1,8 +1,7 @@
 """Compact host-to-hub game-controller command protocol."""
 
-from math import isfinite
-
 MAX_SEQUENCE = 0xFFFF
+MAX_DRIVE_SPEED_DPS = 300.0
 MAX_TURN_DUTY = 20.0
 
 
@@ -20,8 +19,8 @@ def format_command(sequence: int, drive: float, turn: float) -> str:
 
 def format_config(max_drive_speed_dps: float, max_turn_duty: float) -> str:
     """Format runtime limits; the hub independently validates hard ceilings."""
-    if not isfinite(max_drive_speed_dps) or max_drive_speed_dps <= 0.0:
-        raise ValueError("max drive speed must be a positive finite value")
+    if not 0.0 < max_drive_speed_dps <= MAX_DRIVE_SPEED_DPS:
+        raise ValueError("max drive speed must be in (0, 300] degrees/second")
     if not 0.0 <= max_turn_duty <= MAX_TURN_DUTY:
         raise ValueError("max turn duty must be in [0, 20]")
     return "S,{:.1f},{:.1f}".format(max_drive_speed_dps, max_turn_duty)
