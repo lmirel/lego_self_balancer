@@ -140,7 +140,7 @@ breakaway offset is not used.
 Drive does not command motor duty directly. It advances the position target at
 the configured wheel speed. Returning drive to neutral freezes that target so
 position feedback can brake and hold; the target is never jumped to the measured
-wheel position. A 1000 degrees/second runaway cutoff stops the trial before the
+wheel position. A 1200 degrees/second runaway cutoff stops the trial before the
 normal angle cutoff if wheel speed becomes extreme.
 
 Place the robot on the floor, hold it at its normal upright release pose, and run:
@@ -162,7 +162,7 @@ python apps/ps_controller/run_remote.py \
 The development app accepts any positive finite drive reference limit and rejects
 turn limits above 20 duty. Defaults remain axes `1`/`2`, drive `300`, and turn
 `20`. The 600 degrees/second² reference ramp prevents an instant jump. Physical
-safety remains bounded by the 1000 degrees/second runaway stop, coupled
+safety remains bounded by the 1200 degrees/second runaway stop, coupled
 high-speed/lean stop, and 12-degree fall stop. The standalone `apps/0v3` package
 retains its 300 ceiling.
 
@@ -228,7 +228,7 @@ new evidence.
 Only the drive limit is varied; the validated controller law stays unchanged.
 There is no arbitrary development configuration ceiling. A coupled safety cutoff stops if
 measured wheel speed is at least 400 degrees/second while lean reaches 10.5
-degrees, in addition to the existing 12-degree fall and 1000 degrees/second
+degrees, in addition to the existing 12-degree fall and 1200 degrees/second
 runaway limits.
 
 The development controller is physically validated through 700 degrees/second.
@@ -290,8 +290,29 @@ measured speed remained about 718--783 degrees/second, reference speed fell from
 is now continuously speed-adaptive. The initial 600 degrees/second² high-speed
 endpoint was still too aggressive relative to the robot's momentum, so the
 current curve falls from 1800 degrees/second² near rest to 200 degrees/second²
-at 700 degrees/second measured speed. Telemetry reports the active
-`reference_decel_dps2`.
+at 400 degrees/second measured speed, then remains at 200 for all higher speeds.
+This prevents braking strength from rising while the robot still carries
+high-speed momentum. Telemetry reports the active `reference_decel_dps2`.
+
+Hardware timing showed the long BLE status line causing repeated missed 5 ms
+deadlines, so status reporting is reduced from 5 Hz to 2 Hz. Temporary per-loop
+lateness counters were removed after diagnosis to shorten the line and avoid
+adding measurement overhead.
+
+At an 800-degree/second request, normal trajectory overshoot reached 1005 while
+the robot was essentially upright at 0.03 degrees. The emergency speed cutoff is
+therefore 1200; the independent 10.5-degree high-speed lean cutoff remains
+unchanged.
+
+An acceleration-inhibit experiment was rejected. Setting the effective request
+to zero at high lean repeatedly collapsed a held command's reference, after
+which ordinary balance rocking triggered reversal blocking. The robot would
+rarely drive on a second request and eventually rocked into a fall.
+
+Steering authority now uses low-cost stepped limits: up to 20% below 500
+degrees/second, up to 10% from 500 through 699, and up to 5% at 700 and above.
+Each loop also caps steering to the motor duty remaining after reserving 5% for
+balance. Telemetry reports the effective `turn_limit`.
 
 An attempted measured-speed stopping-position calculation was rejected: updating
 that endpoint continuously created a moving target and immediate backward

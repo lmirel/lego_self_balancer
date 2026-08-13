@@ -130,7 +130,7 @@ development app has no arbitrary reference configuration ceiling. Each candidate
 must pass forward/neutral, reverse/neutral, direct
 reversal, and combined turning before advancing. A coupled cutoff stops at 10.5
 degrees lean when wheel speed is already at least 400 degrees/second; the
-independent 12-degree fall and 1000 degrees/second runaway cutoffs remain. The
+independent 12-degree fall and 1200 degrees/second runaway cutoffs remain. The
 standalone `apps/0v3` release retains its 300 ceiling.
 
 Results: 350 degrees/second passed. Sustained 400-degree/second travel also
@@ -157,7 +157,7 @@ not weakened.
 With transition ramping, 500 degrees/second passed. Measured speed stayed mostly
 around 430--550 degrees/second with a brief 585 peak; lean stayed around 0.4--3.3
 degrees and duty below about 68%, including full turn. Testing subsequently
-progressed through 600 to 700 while the physical 1000-degree/second runaway and
+progressed through 600 to 700 while the physical 1200-degree/second runaway and
 angle cutoffs remained.
 
 At a 600-degree/second reference, straight travel reached 770 degrees/second at
@@ -179,10 +179,24 @@ The first profiled 700-degree/second stop still used a fixed 1800
 degrees/second² deceleration and exceeded the lean envelope while measured speed
 remained near 718--783. Deceleration varies continuously with measured speed.
 The original curve of 1800 at rest down to 600 at 700 degrees/second still
-reduced the reference too quickly, so its high-speed endpoint is now 200 while
-the low-speed endpoint remains 1800. Acceleration remains 600. This increases
-high-speed stopping distance while retaining stronger final settling as speed
-approaches zero.
+reduced the reference too quickly. Its high-speed endpoint became 200, but a
+later exact-`0v3.1` run showed that the linear curve had already risen to 829
+by 425 degrees/second and pushed braking lean through the safety boundary. The
+curve now reaches 200 at 400 degrees/second and stays there above that speed.
+Acceleration remains 600; stronger braking is reserved for the final low-speed
+phase.
+
+An 800-degree/second acceleration-inhibit experiment was rejected. Collapsing
+the effective request to zero at high lean interacted with reversal detection
+and repeatedly prevented a held command from establishing a reference. Temporary
+loop counters also confirmed telemetry-induced deadline misses and were removed
+after the reporting interval was reduced to 2 Hz.
+
+At an 800-degree/second request, the robot remained at 0.03 degrees lean but
+normal trajectory overshoot reached 1005 and tripped the former fixed 1000
+cutoff. The emergency threshold is now 1200 while the high-speed angle cutoff is
+unchanged. Timing telemetry also exposed 21 ms worst-case lateness and repeated
+late-loop bursts around the long 5 Hz BLE report; reports are reduced to 2 Hz.
 
 The next 700 test showed that rate adaptation by itself was insufficient: while
 the reference reduced, an accumulated position-target lead still commanded about
@@ -199,6 +213,18 @@ accepted property of the `0v3.1` baseline. Lean-aware braking is the next
 development step and must preserve this checkpoint.
 
 ### TODO — speed-adaptive steering
+
+Initial low-overhead implementation: stepped limits of 20/10/5 duty below
+500/from 500/at 700 degrees/second, additionally capped each loop to reserve 5
+duty points beyond the balance command. At -895 degrees/second the prior code
+had balance duty saturated at -100 while still adding 17.4 turn duty, immediately
+preceding the high-speed angle stop. Hardware validation of the stepped limiter
+is pending.
+
+The first hardware test of the 5-duty high-speed ceiling was stable but turned
+too slowly. Raising it to 8 duty brought the high-speed stutter back, so that
+experiment was rejected and the stable 5-duty ceiling restored. Future turn-rate
+improvement must not come from increasing differential duty at high speed.
 
 - Keep the requested turn response unchanged at low speed.
 - Progressively reduce maximum turn duty above a measured-speed threshold rather

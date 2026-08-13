@@ -105,10 +105,15 @@ def test_remote_balance_preserves_locked_controller_and_bounds_commands():
         "SPEED_GAIN = 0.20",
         "REVERSAL_RELEASE_SPEED_DPS = 60.0",
         "REVERSAL_RELEASE_REFERENCE_DPS = 15.0",
+        "TURN_REDUCED_SPEED_DPS = 500.0",
+        "TURN_MINIMUM_SPEED_DPS = 700.0",
+        "TURN_REDUCED_DUTY = 10.0",
+        "TURN_MINIMUM_DUTY = 5.0",
+        "BALANCE_DUTY_RESERVE = 5.0",
         "REFERENCE_ACCEL_DPS2 = 600.0",
         "REFERENCE_DECEL_MAX_DPS2 = 1800.0",
         "REFERENCE_DECEL_MIN_DPS2 = 200.0",
-        "REFERENCE_DECEL_FULL_SPEED_DPS = 700.0",
+        "REFERENCE_DECEL_RAMP_SPEED_DPS = 400.0",
         "ANGLE_CORRECTION_TAU_S = 5.0",
         "DEADBAND_COMPENSATION = 8.0",
         "FALL_ANGLE_DEG = 12.0",
@@ -119,10 +124,11 @@ def test_remote_balance_preserves_locked_controller_and_bounds_commands():
     assert "HARD_MAX_DRIVE_SPEED_DPS" not in program
     assert "HARD_MAX_TURN_DUTY = 20.0" in program
     assert "DRIVE_NEUTRAL = 0.03" in program
-    assert "RUNAWAY_SPEED_DPS = 1000.0" in program
+    assert "RUNAWAY_SPEED_DPS = 1200.0" in program
     assert "HIGH_SPEED_THRESHOLD_DPS = 400.0" in program
     assert "HIGH_SPEED_ANGLE_LIMIT_DEG = 10.5" in program
     assert "WATCHDOG_MS = 250" in program
+    assert "COMMAND_REPORT_MS = 500" in program
     assert "CALIBRATE_RATE_DPS = 5.0" in program
     assert "CALIBRATE_WHEEL_STEP_DEG = 3" in program
     assert "CALIBRATE_WHEEL_DRIFT_DEG = 12" in program
@@ -155,7 +161,11 @@ def test_remote_balance_preserves_locked_controller_and_bounds_commands():
     assert "reason=runaway_speed" in program
     assert "reason=high_speed_angle" in program
     assert '"reference_speed_dps={:.1f},reversal_blocked={},"' in program
-    assert "turn_duty = turn_command * max_turn_duty" in program
+    assert "if abs(speed) >= TURN_MINIMUM_SPEED_DPS:" in program
+    assert "elif abs(speed) >= TURN_REDUCED_SPEED_DPS:" in program
+    assert "DUTY_LIMIT - BALANCE_DUTY_RESERVE - abs(duty)" in program
+    assert "applied_turn_limit = min(speed_turn_limit, balance_turn_headroom)" in program
+    assert "turn_duty = turn_command * applied_turn_limit" in program
     assert "CONTROL_CONFIG,max_drive_speed_dps=" in program
     assert "left.dc(LEFT_SIGN * (duty + turn_duty))" in program
     assert "right.dc(RIGHT_SIGN * (duty - turn_duty))" in program

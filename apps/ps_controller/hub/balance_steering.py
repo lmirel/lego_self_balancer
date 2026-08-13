@@ -28,8 +28,13 @@ RIGHT_SIGN = 1
 MAX_TURN_DUTY = 20.0
 MAX_DRIVE_SPEED_DPS = 300.0
 HARD_MAX_TURN_DUTY = 20.0
+TURN_REDUCED_SPEED_DPS = 500.0
+TURN_MINIMUM_SPEED_DPS = 700.0
+TURN_REDUCED_DUTY = 10.0
+TURN_MINIMUM_DUTY = 5.0
+BALANCE_DUTY_RESERVE = 5.0
 DRIVE_NEUTRAL = 0.03
-RUNAWAY_SPEED_DPS = 1000.0
+RUNAWAY_SPEED_DPS = 1200.0
 HIGH_SPEED_THRESHOLD_DPS = 400.0
 HIGH_SPEED_ANGLE_LIMIT_DEG = 10.5
 REVERSAL_RELEASE_SPEED_DPS = 60.0
@@ -37,9 +42,9 @@ REVERSAL_RELEASE_REFERENCE_DPS = 15.0
 REFERENCE_ACCEL_DPS2 = 600.0
 REFERENCE_DECEL_MAX_DPS2 = 1800.0
 REFERENCE_DECEL_MIN_DPS2 = 200.0
-REFERENCE_DECEL_FULL_SPEED_DPS = 700.0
+REFERENCE_DECEL_RAMP_SPEED_DPS = 400.0
 WATCHDOG_MS = 250
-COMMAND_REPORT_MS = 200
+COMMAND_REPORT_MS = 500
 MAX_LINE_LENGTH = 48
 
 CALIBRATE_RATE_DPS = 5.0
@@ -281,7 +286,7 @@ try:
             drive_command = 0.0
         requested_speed = drive_command * max_drive_speed_dps
         decel_speed_fraction = min(
-            1.0, abs(speed) / REFERENCE_DECEL_FULL_SPEED_DPS
+            1.0, abs(speed) / REFERENCE_DECEL_RAMP_SPEED_DPS
         )
         reference_decel_dps2 = REFERENCE_DECEL_MAX_DPS2 - (
             REFERENCE_DECEL_MAX_DPS2 - REFERENCE_DECEL_MIN_DPS2
@@ -355,7 +360,17 @@ try:
             if raw_duty < 0:
                 compensation = -compensation
         duty = max(-DUTY_LIMIT, min(DUTY_LIMIT, raw_duty + compensation))
-        turn_duty = turn_command * max_turn_duty
+        if abs(speed) >= TURN_MINIMUM_SPEED_DPS:
+            speed_turn_limit = min(max_turn_duty, TURN_MINIMUM_DUTY)
+        elif abs(speed) >= TURN_REDUCED_SPEED_DPS:
+            speed_turn_limit = min(max_turn_duty, TURN_REDUCED_DUTY)
+        else:
+            speed_turn_limit = max_turn_duty
+        balance_turn_headroom = max(
+            0.0, DUTY_LIMIT - BALANCE_DUTY_RESERVE - abs(duty)
+        )
+        applied_turn_limit = min(speed_turn_limit, balance_turn_headroom)
+        turn_duty = turn_command * applied_turn_limit
 
         # Validated positive/right sign: left forward, right backward.
         left.dc(LEFT_SIGN * (duty + turn_duty))
@@ -367,7 +382,7 @@ try:
                 "CONTROL_STATUS,drive={:.2f},drive_speed_dps={:.1f},turn={:.2f},"
                 "reference_speed_dps={:.1f},reversal_blocked={},"
                 "reference_decel_dps2={:.0f},"
-                "turn_duty={:.2f},position={:.1f},"
+                "turn_limit={:.2f},turn_duty={:.2f},position={:.1f},"
                 "target={:.1f},speed={:.1f},"
                 "angle={:.2f},duty={:.1f},age_ms={},"
                 "watchdog={}".format(
@@ -375,7 +390,7 @@ try:
                     turn_command, reference_speed,
                     1 if reversal_blocked else 0,
                     reference_decel_dps2,
-                    turn_duty, position, commanded_position,
+                    applied_turn_limit, turn_duty, position, commanded_position,
                     speed, relative_angle, duty,
                     age_ms, 1 if watchdog_active else 0,
                 )
