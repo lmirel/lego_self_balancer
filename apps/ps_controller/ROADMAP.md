@@ -242,3 +242,18 @@ Acceptance: predictable low-speed turning is unchanged, high-speed steering
 cannot consume enough differential duty to destabilize balance, the transition
 is continuous, and combined drive/turn trials remain below the high-speed angle
 and runaway cutoffs.
+
+## Host independence and display mounting
+
+The development host no longer calls the hub stop command on ordinary exit.
+Bluetooth loss is handled by the existing 250 ms command watchdog, leaving
+stationary balancing active. Explicit shutdown remains available with
+`--stop-hub-on-exit`, and the hub center button is the normal physical stop.
+The display is globally oriented with `Side.LEFT` for the hub's 90-degree-left
+mounting.
+
+Neutral lift protection stops the program if a zero drive/reference state
+exceeds 400 degrees/second wheel speed for 100 ms while lean remains within 8
+degrees. This targets unloaded wheel acceleration without affecting commanded
+travel or an unfinished braking trajectory. Recovery requires placing the robot
+on the floor and starting a fresh run.

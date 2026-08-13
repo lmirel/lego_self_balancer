@@ -105,6 +105,9 @@ def test_remote_balance_preserves_locked_controller_and_bounds_commands():
         "SPEED_GAIN = 0.20",
         "REVERSAL_RELEASE_SPEED_DPS = 60.0",
         "REVERSAL_RELEASE_REFERENCE_DPS = 15.0",
+        "LIFT_SPEED_DPS = 400.0",
+        "LIFT_MAX_ANGLE_DEG = 8.0",
+        "LIFT_CONFIRM_MS = 100",
         "TURN_REDUCED_SPEED_DPS = 500.0",
         "TURN_MINIMUM_SPEED_DPS = 700.0",
         "TURN_REDUCED_DUTY = 10.0",
@@ -140,6 +143,8 @@ def test_remote_balance_preserves_locked_controller_and_bounds_commands():
     assert "CALIBRATION_WAIT,pitch_deg=" in program
     assert "RELEASE_READY,gyro_bias_dps=" in program
     assert "hub.speaker.beep(700, 150)" in program
+    assert "from pybricks.parameters import Axis, Button, Port, Side" in program
+    assert "hub.display.orientation(up=Side.LEFT)" in program
     assert "for number in (3, 2, 1)" not in program
     assert "last_sequence, drive_command, turn_command = command" in program
     assert "requested_speed = drive_command * max_drive_speed_dps" in program
@@ -160,6 +165,10 @@ def test_remote_balance_preserves_locked_controller_and_bounds_commands():
     assert "+ SPEED_GAIN * speed" in program
     assert "reason=runaway_speed" in program
     assert "reason=high_speed_angle" in program
+    assert "drive_command == 0.0" in program
+    assert "and reference_speed == 0.0" in program
+    assert "lift_detect_ms += DT_MS" in program
+    assert "reason=lifted" in program
     assert '"reference_speed_dps={:.1f},reversal_blocked={},"' in program
     assert "if abs(speed) >= TURN_MINIMUM_SPEED_DPS:" in program
     assert "elif abs(speed) >= TURN_REDUCED_SPEED_DPS:" in program
@@ -185,3 +194,6 @@ def test_balance_host_waits_until_hub_can_drain_stdin():
     assert "hub.write_line" in host
     assert 'parser.add_argument("--drive-axis", type=int, default=1)' in host
     assert 'parser.add_argument("--turn-axis", type=int, default=2)' in host
+    assert '"--stop-hub-on-exit", action="store_true"' in host
+    assert "if args.stop_hub_on_exit:" in host
+    assert "Host disconnected; hub balancing remains active." in host

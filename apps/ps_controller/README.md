@@ -7,6 +7,12 @@ it cannot connect to or move the robot.
 
 See [ROADMAP.md](ROADMAP.md) for the staged implementation and safety gates.
 
+Architecture documentation:
+
+- [System architecture](ARCHITECTURE.md)
+- [Host architecture](HOST_ARCHITECTURE.md)
+- [Robot hub architecture](HUB_ARCHITECTURE.md)
+
 ## Set up
 
 Pair the controller in macOS Bluetooth settings, then use the project's virtual
@@ -183,13 +189,31 @@ starts whichever program is currently stored on the selected hub.
 Hold the robot still at its natural upright pose. After 500 ms of accepted
 stillness, the hub displays `R` and emits one 700 Hz readiness beep. Release it
 at the beep with both sticks centered; there is no countdown.
+
+The hub is mounted with its display rotated left, so display orientation is set
+globally to `Side.LEFT`. All hub characters, numbers, icons, and pixel output
+use that orientation, including calibration `H` and readiness `R`.
+
+Ctrl-C or ordinary host termination disconnects Bluetooth without explicitly
+stopping the hub program. The hub watchdog zeros drive and turn after 250 ms,
+while balancing continues. Use the physical hub center button to stop safely.
+For maintenance only, `--stop-hub-on-exit` restores explicit program shutdown
+when the host exits.
+
+Lifting a balancing robot removes the wheel contact assumed by the controller,
+so unloaded motors can accelerate without correcting body angle. While drive and
+reference speed are both zero, wheel speed above 400 degrees/second for 100 ms
+with lean inside 8 degrees is treated as a lift. The hub stops both motors and
+exits with `BALANCE_STOPPED,reason=lifted`; restart after placing the robot back
+on the floor. Automatic in-hand restart is intentionally disabled.
 First confirm ordinary neutral balancing. Test steering again, then use only a
 small axis 1 drive deflection and return it to neutral. Confirm the robot moves,
 slows, and holds near its release location. Test the opposite direction only
 after that passes. Keep a hand ready to catch it. CENTER, Ctrl-C, Bluetooth stop,
-controller loss, and hard-fall detection stop the program. A 250 ms command
-timeout zeros both commands, freezes the position target, and continues
-stationary balancing.
+controller loss, and hard-fall detection are independent interruption paths.
+CENTER and hub safety stops terminate the program; Ctrl-C, host loss, and
+controller/BLE loss stop command traffic, after which the 250 ms watchdog zeros
+both commands and continues stationary balancing.
 The host waits for `BALANCE_ACTIVE` before transmitting, so calibration cannot
 fill the hub's stdin buffer.
 

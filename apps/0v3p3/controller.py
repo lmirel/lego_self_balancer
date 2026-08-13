@@ -11,7 +11,7 @@ from control import AxisProcessor
 from protocol import format_command, format_config
 
 
-HUB_PROGRAM = Path(__file__).resolve().parent / "hub" / "balance_steering.py"
+HUB_PROGRAM = Path(__file__).resolve().parent / "hub" / "main.py"
 
 
 def parse_args():

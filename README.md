@@ -7,6 +7,10 @@ The validated PS4-controlled `0v3` release is packaged independently in
 [`apps/0v3/`](apps/0v3/README.md), including its host environment, hub program,
 deployment instructions, runtime parameters, and safety notes.
 
+The current high-speed, host-independent `0v3.3` release is packaged in
+[`apps/0v3p3/`](apps/0v3p3/README.md), including complete system, host, and
+robot architecture documentation.
+
 ## Working baseline: 0v1
 
 Version `0v1` is the first physically validated self-balancing baseline. It is
