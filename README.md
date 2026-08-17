@@ -29,6 +29,7 @@ The locked controller in `hub/official_reference.py` uses:
 - stationary gyro-bias calibration and a three-second arming countdown;
 - a 12-degree hard fall stop, CENTER abort, Bluetooth firmware stop, and a
   30-second trial limit.
+Based on https://github.com/pybricks/pybricks-projects/blob/master/sets/mindstorms-robot-inventor/other-models/balancer/main.py
 
 Run one catch-ready baseline trial from the repository root:
 
